@@ -1,4 +1,4 @@
-name: 'Github Issue Copier'
+name: 'Github Issue Copier - Forked'
 description: 'Copy an issue to another repository with assignee and content support'
 author: 'Soichi Sumi'
 inputs:
