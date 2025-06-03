@@ -45,15 +45,80 @@ const checkKeywords = (keywords, body) => {
 };
 module.exports.checkKeywords = checkKeywords;
 
-const createNewIssue = async (token, owner, repoName, title, body, assignees, labels, fromIssue) => {
+const parseKeywordCommand = (keywords, body) => {
+    const lowerBody = body.toLowerCase();
+    for(let k of keywords) {
+        const keywordIndex = lowerBody.indexOf(k.toLowerCase());
+        if (keywordIndex !== -1) {
+            // Extract the part after the keyword
+            const afterKeyword = body.substring(keywordIndex + k.length).trim();
+            
+            let assignee = null;
+            let additionalContent = '';
+            
+            // Check if there's an @ mention after the keyword
+            const atIndex = afterKeyword.indexOf('@');
+            if (atIndex !== -1) {
+                // Extract everything after @
+                const afterAt = afterKeyword.substring(atIndex + 1);
+                
+                // Split by whitespace to get the username (first part after @)
+                const parts = afterAt.trim().split(/\s+/);
+                if (parts.length > 0 && parts[0] && parts[0].trim() !== '') {
+                    assignee = parts[0];
+                    // Everything after the username is additional content
+                    if (parts.length > 1) {
+                        additionalContent = parts.slice(1).join(' ');
+                    }
+                } else {
+                    // If @ is followed by empty space or nothing, treat everything as additional content
+                    additionalContent = afterAt.trim();
+                }
+            } else {
+                // If no @ mention, everything after keyword is additional content
+                additionalContent = afterKeyword;
+            }
+            
+            return {
+                found: true,
+                assignee: assignee,
+                additionalContent: additionalContent.trim()
+            };
+        }
+    }
+    return {
+        found: false,
+        assignee: null,
+        additionalContent: ''
+    };
+};
+module.exports.parseKeywordCommand = parseKeywordCommand;
+
+const createNewIssue = async (token, owner, repoName, title, body, assignees, labels, fromIssue, additionalContent) => {
     const octokit = new github.GitHub(token);
     if (!fromIssue) {
         throw new Error('fromIssue is not provided')
     }
+    
+    // Combine original body, additional content, and source reference
+    let finalBody = '';
     if (typeof body === 'string' && body !== '') {
-        body = body + `\n\ncopiedFrom: ${fromIssue}`;
-    }else {
-        body = `copiedFrom: ${fromIssue}`
+        finalBody = body;
+    }
+    
+    if (additionalContent && additionalContent.trim() !== '') {
+        if (finalBody !== '') {
+            finalBody += '\n\n' + additionalContent;
+        } else {
+            finalBody = additionalContent;
+        }
+    }
+    
+    // Add source reference
+    if (finalBody !== '') {
+        finalBody += `\n\ncopiedFrom: ${fromIssue}`;
+    } else {
+        finalBody = `copiedFrom: ${fromIssue}`;
     }
 
     const res = await octokit.issues.create(
@@ -61,7 +126,7 @@ const createNewIssue = async (token, owner, repoName, title, body, assignees, la
             owner: owner,
             repo: repoName,
             title: title,
-            body: body,
+            body: finalBody,
             assignees: assignees,
             labels: labels,
         }

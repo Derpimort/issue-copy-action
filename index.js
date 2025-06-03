@@ -13,13 +13,33 @@ async function run() {
 
     const token = core.getInput('githubToken');
     const issue = await lib.getIssueFromContext(token);
+    const comment = lib.getIssueCommentFromContext();
 
-    if (!lib.checkKeywords([keyword], lib.getIssueCommentFromContext().body)){
-      console.log(`Keyword not included. keyword: ${keyword}, ${issue.data.body}`);
+    // Parse the comment for keyword, assignee, and additional content
+    const parseResult = lib.parseKeywordCommand([keyword], comment.body);
+    
+    if (!parseResult.found) {
+      console.log(`Keyword not included. keyword: ${keyword}, comment: ${comment.body}`);
       return;
     }
 
-    const created = await lib.createNewIssue(token, owner, repoName, issue.data.title, contentOfNewIssue, ['soichisumi'], [], issue.data.html_url);
+    // Determine assignees
+    let assignees = ['soichisumi']; // default assignee
+    if (parseResult.assignee) {
+      assignees = [parseResult.assignee];
+    }
+
+    const created = await lib.createNewIssue(
+      token, 
+      owner, 
+      repoName, 
+      issue.data.title, 
+      contentOfNewIssue, 
+      assignees, 
+      [], 
+      issue.data.html_url,
+      parseResult.additionalContent
+    );
 
     core.setOutput('created', created);
   } 
